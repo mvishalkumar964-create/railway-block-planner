@@ -370,9 +370,9 @@ app.put("/api/block-requests/:id/reschedule", async (req, res) => {
     });
   }
 });
-const PORT = 5001;
+const PORT = process.env.PORT || 5001;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚆 Railway backend running on http://localhost:${PORT}`);
 });
 
