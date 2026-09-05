@@ -47,7 +47,7 @@ function App() {
 const loadTasks = async () => {
   try {
     const response = await fetch(
-      "http://localhost:5001/api/maintenance-tasks"
+fetch("https://railway-block-planner-m9f2.onrender.com/api/maintenance")
     );
 
     const data = await response.json();
