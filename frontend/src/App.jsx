@@ -52,7 +52,7 @@ const loadTasks = async () => {
 
     const data = await response.json();
 
-    const formattedTasks = data.map((item) => ({
+    const formattedTasks = data.tasks.map((item) => ({
       id: item.id,
       task: item.task_name,
       department: item.department,
@@ -78,7 +78,7 @@ const loadBlockRequests = async () => {
 
     const data = await response.json();
 
-    const formattedRequests = data.map((item) => ({
+   const formattedRequests = data.requests.map((item) => ({
       id: item.id,
       task: item.task_name,
       department: item.department,
