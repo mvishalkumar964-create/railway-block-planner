@@ -47,8 +47,8 @@ function App() {
 const loadTasks = async () => {
   try {
     const response = await fetch(
-fetch("https://railway-block-planner-m9f2.onrender.com/api/maintenance")
-    );
+  "https://railway-block-planner-m9f2.onrender.com/api/maintenance"
+);
 
     const data = await response.json();
 
@@ -73,8 +73,8 @@ fetch("https://railway-block-planner-m9f2.onrender.com/api/maintenance")
 const loadBlockRequests = async () => {
   try {
     const response = await fetch(
-      "http://localhost:5001/api/block-requests"
-    );
+  "https://railway-block-planner-m9f2.onrender.com/api/block-requests"
+);
 
     const data = await response.json();
 
