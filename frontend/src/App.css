@@ -1300,3 +1300,226 @@ td small {
   white-space: normal !important;
   line-height: 1.4;
 }
+
+/* ================= MODULE 3: AI BLOCK WINDOW OPTIONS ================= */
+
+.ai-options-btn {
+  border: none;
+  background: #ede9fe;
+  color: #6d28d9;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-options-btn:hover {
+  background: #ddd6fe;
+}
+
+.options-modal-box {
+  max-width: 900px;
+}
+
+.options-context {
+  font-size: 13px;
+  color: #4b5563;
+  margin-bottom: 16px;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.option-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option-card.recommended {
+  border-color: #a78bfa;
+  background: #f5f3ff;
+}
+
+.recommended-badge {
+  align-self: flex-start;
+  background: #7c3aed;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 10px;
+}
+
+.option-card h4 {
+  font-size: 14px;
+  color: #111827;
+}
+
+.option-time {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.option-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.impact-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 4px 7px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.impact-tag.impact-low,
+.impact-tag.efficiency-high {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.impact-tag.impact-medium,
+.impact-tag.efficiency-medium {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.impact-tag.impact-high,
+.impact-tag.efficiency-low {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.pros-list,
+.cons-list {
+  list-style: none;
+  font-size: 11px;
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.use-slot-btn {
+  margin-top: auto;
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.use-slot-btn:hover {
+  background: #1d4ed8;
+}
+
+.recommendation-note {
+  margin-top: 16px;
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #1e40af;
+  line-height: 1.6;
+}
+
+.human-decision-note {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.options-error {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+/* ================= AI BLOCK SUGGESTION + CONFLICT ANALYSIS ================= */
+
+.ai-btn {
+  margin-top: 10px;
+  border: none;
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 9px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ai-btn:hover {
+  background: #bfdbfe;
+}
+
+.ai-analysis-box {
+  margin-top: 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: #0c4a6e;
+}
+
+.ai-analysis-box h4 {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.ai-analysis-box p {
+  margin: 3px 0;
+}
+
+.ai-conflict-btn {
+  margin-top: 6px;
+  border: none;
+  background: #ede9fe;
+  color: #6d28d9;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: block;
+}
+
+.ai-conflict-btn:hover {
+  background: #ddd6fe;
+}
+
+.ai-conflict-btn:disabled {
+  opacity: 0.6;
+}
+
+.ai-conflict-result {
+  margin-top: 8px;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 10.5px;
+  color: #4c1d95;
+  max-width: 260px;
+}
+
+.ai-conflict-result p {
+  margin: 2px 0;
+}

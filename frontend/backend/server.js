@@ -508,6 +508,214 @@ Return ONLY the JSON object, nothing else.
   }
 });
 
+// ================= AI BLOCK WINDOW OPTIONS (Module 3) =================
+// For a given block request, ask Claude to propose 2-3 candidate time
+// windows, comparing train traffic, maintenance duration, other
+// department work, conflicts and work efficiency for each. This is
+// DECISION SUPPORT ONLY — it returns suggestions; it never changes the
+// request's status or time in the database itself. The human decides
+// which (if any) option to apply, and separately approves/rejects.
+
+app.post("/api/ai-block-options", async (req, res) => {
+  try {
+    const { request, trainSchedule, blockRequests, tasks } = req.body;
+
+    if (!request || !request.location || !request.date) {
+      return res.status(400).json({
+        status: "ERROR",
+        message: "request (with location and date) is required",
+      });
+    }
+
+    const relevantTrains = (trainSchedule || []).filter(
+      (t) => t.route === request.location
+    );
+
+    const otherWork = (blockRequests || []).filter(
+      (b) => b.location === request.location && b.id !== request.id
+    );
+
+    const prompt = `
+You are an expert railway maintenance block planner analyzing a block
+request to suggest the safest, most efficient time windows.
+
+Block Request:
+${JSON.stringify(request, null, 2)}
+
+Train movements on this route ("${request.location}"):
+${JSON.stringify(relevantTrains, null, 2)}
+
+Other block requests / work on this same location:
+${JSON.stringify(otherWork, null, 2)}
+
+Related maintenance tasks:
+${JSON.stringify(tasks || [], null, 2)}
+
+Task: Propose exactly 3 candidate time window options for this block
+(each with a start and end time on the same date as the request, same
+total duration as the originally requested window unless a shorter/longer
+window is clearly better justified). For each option, evaluate:
+- train_impact: "Low" | "Medium" | "High" (based on train movements
+  overlapping or near this window)
+- work_efficiency: "Low" | "Medium" | "High"
+- pros: array of short strings (max 3)
+- cons: array of short strings (max 3)
+
+Then pick which single option you recommend and explain why in 1-2
+sentences (recommendation_reason). This is a recommendation only — a
+human controller will make the final decision.
+
+Return STRICT JSON only, no markdown, matching exactly this shape:
+
+{
+  "options": [
+    {
+      "label": "Option A",
+      "startTime": "HH:MM",
+      "endTime": "HH:MM",
+      "train_impact": "Low",
+      "work_efficiency": "High",
+      "pros": ["..."],
+      "cons": ["..."]
+    }
+  ],
+  "recommended_label": "Option A",
+  "recommendation_reason": "..."
+}
+`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const raw = message.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("\n")
+      .trim();
+
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.error("AI block options parse error:", parseErr.message, cleaned);
+      return res.status(502).json({
+        status: "ERROR",
+        message: "AI response could not be parsed",
+      });
+    }
+
+    res.json({
+      status: "OK",
+      ...parsed,
+    });
+  } catch (error) {
+    console.error("AI block options error:", error.message);
+
+    res.status(500).json({
+      status: "ERROR",
+      message: "Could not generate block window options",
+      error: error.message,
+    });
+  }
+});
+
+// ================= AI CONFLICT ANALYSIS (Conflicts page) =================
+// For one specific block/train conflict pair, ask Claude to assess
+// severity and suggest a resolution. Decision support only — never
+// changes the block's status or time itself; the human still uses the
+// existing Reschedule / Approve / Reject controls.
+
+app.post("/api/ai-analyze-conflict", async (req, res) => {
+  try {
+    const { block, train } = req.body;
+
+    if (!block || !train) {
+      return res.status(400).json({
+        status: "ERROR",
+        message: "block and train data are required",
+      });
+    }
+
+    const prompt = `
+You are an AI assistant for a Railway Block Planning System, analyzing a
+conflict between a maintenance block and a train movement.
+
+BLOCK:
+Task: ${block.taskName}
+Department: ${block.department}
+Location: ${block.location}
+Date: ${block.date}
+Start: ${block.startTime}
+End: ${block.endTime}
+
+TRAIN:
+Train: ${train.trainName}
+Route: ${train.route}
+Date: ${train.date}
+Arrival: ${train.arrival}
+Departure: ${train.departure}
+
+Return STRICT JSON only, no markdown, matching exactly this shape:
+
+{
+  "conflictLevel": "Low" | "Medium" | "High" | "Critical",
+  "reason": string,
+  "trainImpact": string,
+  "workImpact": string,
+  "suggestedAction": string,
+  "alternativeWindow": string,
+  "recommendation": string
+}
+
+Do not claim to approve or reject anything — this is advisory only, a
+human controller makes the final decision.
+`;
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 512,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const raw = message.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+
+    let analysis;
+    try {
+      analysis = JSON.parse(cleaned);
+    } catch (parseErr) {
+      console.error("AI conflict parse error:", parseErr.message, cleaned);
+      return res.status(502).json({
+        status: "ERROR",
+        message: "AI response could not be parsed",
+      });
+    }
+
+    res.json({
+      status: "OK",
+      analysis,
+    });
+  } catch (error) {
+    console.error("AI conflict analysis error:", error.message);
+
+    res.status(500).json({
+      status: "ERROR",
+      message: "AI conflict analysis failed",
+      error: error.message,
+    });
+  }
+});
+
 // Routes are all registered above; server starts last.
 const PORT = process.env.PORT || 5001;
 

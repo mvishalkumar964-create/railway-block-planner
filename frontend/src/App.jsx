@@ -447,6 +447,201 @@ function App() {
     }
   };
 
+  // ================= AI BLOCK WINDOW OPTIONS (Module 3) =================
+  // Decision support only: shows candidate time windows with pros/cons.
+  // Human picks "Use this slot" (which just moves the block's time, same
+  // as manual reschedule) and separately still Approves/Rejects it.
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [optionsData, setOptionsData] = useState(null);
+  const [activeOptionsRequest, setActiveOptionsRequest] = useState(null);
+
+  const getBlockWindowOptions = async (request) => {
+    setActiveOptionsRequest(request);
+    setShowOptionsModal(true);
+    setLoadingOptions(true);
+    setOptionsData(null);
+
+    try {
+      const response = await fetch(
+        "https://railway-block-planner-m9f2.onrender.com/api/ai-block-options",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            request,
+            trainSchedule,
+            blockRequests,
+            tasks,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Could not analyze options");
+      }
+
+      setOptionsData(data);
+    } catch (error) {
+      console.error("AI block options error:", error);
+      setOptionsData({ error: error.message });
+    } finally {
+      setLoadingOptions(false);
+    }
+  };
+
+  // Human clicks this to actually move the block to a suggested slot.
+  // Reuses the existing reschedule endpoint — no auto-approval happens.
+  const applyBlockOption = async (option) => {
+    if (!activeOptionsRequest) return;
+
+    try {
+      const response = await fetch(
+        `https://railway-block-planner-m9f2.onrender.com/api/block-requests/${activeOptionsRequest.id}/reschedule`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            startTime: option.startTime,
+            endTime: option.endTime,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Could not apply time slot");
+      }
+
+      setBlockRequests((prev) =>
+        prev.map((item) =>
+          item.id === activeOptionsRequest.id
+            ? {
+                ...item,
+                startTime: option.startTime,
+                endTime: option.endTime,
+                status: "Rescheduled",
+              }
+            : item
+        )
+      );
+
+      setShowOptionsModal(false);
+      alert(
+        `✅ Time slot applied: ${option.startTime} - ${option.endTime}\nPlease review and Approve/Reject as needed.`
+      );
+    } catch (error) {
+      console.error("Apply option error:", error);
+      alert(`❌ Could not apply time slot: ${error.message}`);
+    }
+  };
+
+  // ================= AI BLOCK SUGGESTION (built on Module 1 extraction) =================
+  // Turns the AI extraction result (from analyzeDescription) into a
+  // reusable suggestion that can be applied to a new Block Request.
+  // Still decision support only — nothing is created/approved automatically.
+  const [aiBlockSuggestion, setAiBlockSuggestion] = useState(null);
+
+  const createAISuggestedBlock = () => {
+    if (!aiExtractedInfo) {
+      alert("Pehle description ko 'Analyze with AI' se analyze karo.");
+      return;
+    }
+
+    setAiBlockSuggestion({
+      taskName: formData.task || aiExtractedInfo.asset || "Maintenance Work",
+      department: aiExtractedInfo.department,
+      location: aiExtractedInfo.location || formData.location,
+      reason: aiExtractedInfo.issue,
+      safetyImpact: aiExtractedInfo.safety_impact,
+      suggestedWindow: aiExtractedInfo.suggested_block_requirement,
+    });
+  };
+
+  const applyAIBlockSuggestionToForm = () => {
+    if (!aiBlockSuggestion) return;
+
+    setBlockFormData({
+      task: aiBlockSuggestion.taskName || "",
+      department: ["Engineering", "S&T", "Traction"].includes(
+        aiBlockSuggestion.department
+      )
+        ? aiBlockSuggestion.department
+        : "Engineering",
+      location: aiBlockSuggestion.location || "",
+      date: formData.dueDate || "",
+      startTime: "",
+      endTime: "",
+      reason: aiBlockSuggestion.reason || "AI suggested maintenance block",
+    });
+
+    setActivePage("Block Requests");
+    setShowBlockForm(true);
+  };
+
+  // ================= AI CONFLICT ANALYSIS (Conflicts page) =================
+  // For a specific block/train conflict pair, ask Claude to assess
+  // severity and suggest an alternative window. Keyed by request id so
+  // each row on the Conflicts page can show its own result. Decision
+  // support only — human still uses the existing Reschedule button.
+  const [aiConflictResults, setAiConflictResults] = useState({});
+  const [loadingConflictId, setLoadingConflictId] = useState(null);
+
+  const analyzeConflictWithAI = async (request, train) => {
+    if (!request || !train) {
+      alert("Conflict data available nahi hai.");
+      return;
+    }
+
+    setLoadingConflictId(request.id);
+
+    try {
+      const response = await fetch(
+        "https://railway-block-planner-m9f2.onrender.com/api/ai-analyze-conflict",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            block: {
+              taskName: request.task,
+              department: request.department,
+              location: request.location,
+              date: String(request.date).slice(0, 10),
+              startTime: request.startTime,
+              endTime: request.endTime,
+            },
+            train: {
+              trainName: train.trainName,
+              route: train.route,
+              date: String(train.date).slice(0, 10),
+              arrival: train.arrival,
+              departure: train.departure,
+            },
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "AI conflict analysis failed");
+      }
+
+      setAiConflictResults((prev) => ({
+        ...prev,
+        [request.id]: data.analysis,
+      }));
+    } catch (error) {
+      console.error("AI Conflict Error:", error);
+      alert("AI conflict analysis failed: " + error.message);
+    } finally {
+      setLoadingConflictId(null);
+    }
+  };
+
   const [showForm, setShowForm] = useState(false);
 
   // ✅ single, merged formData (previously declared twice — fixed)
@@ -1305,6 +1500,49 @@ function App() {
                             pre-filled hain — save karne se pehle verify kar
                             lein. Final decision aapka hai.
                           </small>
+
+                          <button
+                            type="button"
+                            className="ai-btn"
+                            onClick={createAISuggestedBlock}
+                          >
+                            🚦 Create Block Suggestion
+                          </button>
+                        </div>
+                      )}
+
+                      {aiBlockSuggestion && (
+                        <div className="ai-analysis-box">
+                          <h4>🚦 AI Block Suggestion</h4>
+                          <p>
+                            <strong>Task:</strong> {aiBlockSuggestion.taskName}
+                          </p>
+                          <p>
+                            <strong>Location:</strong>{" "}
+                            {aiBlockSuggestion.location}
+                          </p>
+                          <p>
+                            <strong>Department:</strong>{" "}
+                            {aiBlockSuggestion.department}
+                          </p>
+                          <p>
+                            <strong>Reason:</strong> {aiBlockSuggestion.reason}
+                          </p>
+                          <p>
+                            <strong>Suggested window:</strong>{" "}
+                            {aiBlockSuggestion.suggestedWindow}
+                          </p>
+                          <small>
+                            AI suggestion requires human approval — click below
+                            to open a pre-filled Block Request form.
+                          </small>
+                          <button
+                            type="button"
+                            className="ai-btn"
+                            onClick={applyAIBlockSuggestionToForm}
+                          >
+                            🚦 Apply to Block Request
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1747,6 +1985,13 @@ function App() {
                             >
                               Reject
                             </button>
+
+                            <button
+                              className="ai-options-btn"
+                              onClick={() => getBlockWindowOptions(request)}
+                            >
+                              🤖 AI Options
+                            </button>
                           </div>
                         )}
                       </td>
@@ -2148,6 +2393,45 @@ function App() {
                               >
                                 🔄 Reschedule
                               </button>
+
+                              <button
+                                className="ai-conflict-btn"
+                                onClick={() =>
+                                  analyzeConflictWithAI(request, conflictTrain)
+                                }
+                                disabled={loadingConflictId === request.id}
+                              >
+                                {loadingConflictId === request.id
+                                  ? "🤖 Analyzing..."
+                                  : "🤖 AI Analyze"}
+                              </button>
+
+                              {aiConflictResults[request.id] && (
+                                <div className="ai-conflict-result">
+                                  <p>
+                                    <strong>Level:</strong>{" "}
+                                    {aiConflictResults[request.id].conflictLevel}
+                                  </p>
+                                  <p>
+                                    <strong>Reason:</strong>{" "}
+                                    {aiConflictResults[request.id].reason}
+                                  </p>
+                                  <p>
+                                    <strong>Suggested action:</strong>{" "}
+                                    {
+                                      aiConflictResults[request.id]
+                                        .suggestedAction
+                                    }
+                                  </p>
+                                  <p>
+                                    <strong>Alternative window:</strong>{" "}
+                                    {
+                                      aiConflictResults[request.id]
+                                        .alternativeWindow
+                                    }
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <span className="safe-badge">✅ Safe</span>
@@ -2592,6 +2876,130 @@ function App() {
                   <p>Generating plan, please wait...</p>
                 ) : (
                   <pre className="ai-plan-text">{aiPlanText}</pre>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Module 3: AI Block Window Options modal */}
+        {showOptionsModal && (
+          <div
+            className="modal-backdrop"
+            onClick={() => setShowOptionsModal(false)}
+          >
+            <div
+              className="modal-box options-modal-box"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h3>🤖 Suggested Time Windows</h3>
+                <button
+                  className="modal-close-btn"
+                  onClick={() => setShowOptionsModal(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body">
+                {activeOptionsRequest && (
+                  <p className="options-context">
+                    <strong>{activeOptionsRequest.task}</strong> —{" "}
+                    {activeOptionsRequest.location} on{" "}
+                    {String(activeOptionsRequest.date).slice(0, 10)}
+                  </p>
+                )}
+
+                {loadingOptions && <p>Analyzing train schedule and conflicts...</p>}
+
+                {!loadingOptions && optionsData?.error && (
+                  <p className="options-error">
+                    ❌ Could not generate options: {optionsData.error}
+                  </p>
+                )}
+
+                {!loadingOptions && optionsData?.options && (
+                  <>
+                    <div className="options-grid">
+                      {optionsData.options.map((opt, i) => {
+                        const isRecommended =
+                          opt.label === optionsData.recommended_label;
+
+                        return (
+                          <div
+                            key={i}
+                            className={`option-card ${
+                              isRecommended ? "recommended" : ""
+                            }`}
+                          >
+                            {isRecommended && (
+                              <span className="recommended-badge">
+                                ⭐ AI Recommended
+                              </span>
+                            )}
+
+                            <h4>{opt.label}</h4>
+                            <div className="option-time">
+                              {opt.startTime} – {opt.endTime}
+                            </div>
+
+                            <div className="option-tags">
+                              <span
+                                className={`impact-tag impact-${String(
+                                  opt.train_impact
+                                ).toLowerCase()}`}
+                              >
+                                Train Impact: {opt.train_impact}
+                              </span>
+                              <span
+                                className={`impact-tag efficiency-${String(
+                                  opt.work_efficiency
+                                ).toLowerCase()}`}
+                              >
+                                Efficiency: {opt.work_efficiency}
+                              </span>
+                            </div>
+
+                            {opt.pros?.length > 0 && (
+                              <ul className="pros-list">
+                                {opt.pros.map((p, idx) => (
+                                  <li key={idx}>✅ {p}</li>
+                                ))}
+                              </ul>
+                            )}
+
+                            {opt.cons?.length > 0 && (
+                              <ul className="cons-list">
+                                {opt.cons.map((c, idx) => (
+                                  <li key={idx}>⚠️ {c}</li>
+                                ))}
+                              </ul>
+                            )}
+
+                            <button
+                              className="use-slot-btn"
+                              onClick={() => applyBlockOption(opt)}
+                            >
+                              Use This Slot
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {optionsData.recommendation_reason && (
+                      <div className="recommendation-note">
+                        <strong>Why {optionsData.recommended_label}:</strong>{" "}
+                        {optionsData.recommendation_reason}
+                      </div>
+                    )}
+
+                    <p className="human-decision-note">
+                      Final approval/rejection is still your decision — AI
+                      only suggests time windows.
+                    </p>
+                  </>
                 )}
               </div>
             </div>
