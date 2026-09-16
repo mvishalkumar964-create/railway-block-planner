@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Engineering Field App — Track Work</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+  body { background: #f4f6f9; color: #1f2937; padding-bottom: 40px; }
+  header { background: #2563eb; color: white; padding: 20px; text-align: center; }
+  header h1 { font-size: 20px; }
+  header p { font-size: 12px; opacity: 0.9; margin-top: 4px; }
+  .container { max-width: 480px; margin: 20px auto; padding: 0 16px; }
+  .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; }
+  .card h2 { font-size: 16px; margin-bottom: 14px; color: #111827; }
+  label { display: block; font-size: 12px; font-weight: bold; color: #374151; margin-bottom: 6px; margin-top: 14px; }
+  input, select, textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 7px; padding: 10px 12px; font-size: 13px; outline: none; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { border-color: #2563eb; }
+  textarea { resize: vertical; }
+  .desc-row { display: flex; gap: 8px; align-items: flex-start; }
+  .desc-row textarea { flex: 1; }
+  .mic-btn { flex-shrink: 0; border: none; background: #eff6ff; color: #2563eb; padding: 10px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .mic-btn.listening { background: #fee2e2; color: #dc2626; }
+  .submit-btn { width: 100%; margin-top: 18px; border: none; background: #2563eb; color: white; padding: 13px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .submit-btn:hover { background: #1d4ed8; }
+  .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .status-msg { margin-top: 12px; font-size: 13px; padding: 10px 12px; border-radius: 7px; display: none; }
+  .status-msg.success { background: #dcfce7; color: #15803d; display: block; }
+  .status-msg.error { background: #fee2e2; color: #dc2626; display: block; }
+  .recent-list { display: flex; flex-direction: column; gap: 10px; }
+  .recent-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+  .recent-item strong { display: block; font-size: 13px; margin-bottom: 3px; }
+  .recent-item .meta { color: #6b7280; font-size: 11px; margin-top: 4px; }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-top: 4px; }
+  .badge.open { background: #fef3c7; color: #b45309; }
+  .badge.resolved { background: #dcfce7; color: #15803d; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔧 Engineering Field App</h1>
+  <p>Track Work — Complaint / Issue Reporting</p>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Report a Track Issue</h2>
+    <form id="complaintForm">
+      <label>Your Name</label>
+      <input type="text" id="reportedBy" placeholder="e.g. Ramesh Kumar" required />
+
+      <label>Location *</label>
+      <input type="text" id="location" placeholder="e.g. Ranchi - Muri KM 12" required />
+
+      <label>Description *</label>
+      <div class="desc-row">
+        <textarea id="description" rows="4" placeholder="Describe the issue... Hindi ya English, jaise chahein." required></textarea>
+        <button type="button" class="mic-btn" id="micBtn">🎤 Speak</button>
+      </div>
+
+      <label>Priority</label>
+      <select id="priority">
+        <option>High</option>
+        <option selected>Medium</option>
+        <option>Low</option>
+      </select>
+
+      <label>Contact Number (optional)</label>
+      <input type="tel" id="phone" placeholder="10-digit mobile number" />
+
+      <button type="submit" class="submit-btn" id="submitBtn">Submit Complaint</button>
+      <div class="status-msg" id="statusMsg"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Recent Engineering Complaints</h2>
+    <div class="recent-list" id="recentList">
+      <p style="color:#9ca3af; font-size:12px;">Loading...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ⚠️ Update this if your backend URL changes
+  const API_BASE = "https://railway-block-planner-m9f2.onrender.com";
+  const DEPARTMENT = "Engineering";
+
+  const form = document.getElementById("complaintForm");
+  const statusMsg = document.getElementById("statusMsg");
+  const submitBtn = document.getElementById("submitBtn");
+  const micBtn = document.getElementById("micBtn");
+  const descriptionEl = document.getElementById("description");
+
+  // Voice input (Chrome/Edge only)
+  let isListening = false;
+  micBtn.addEventListener("click", () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Try Chrome.");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "hi-IN";
+    recognition.interimResults = false;
+
+    recognition.onstart = () => { isListening = true; micBtn.classList.add("listening"); micBtn.textContent = "🔴 Listening..."; };
+    recognition.onend = () => { isListening = false; micBtn.classList.remove("listening"); micBtn.textContent = "🎤 Speak"; };
+    recognition.onerror = () => { isListening = false; micBtn.classList.remove("listening"); micBtn.textContent = "🎤 Speak"; };
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      descriptionEl.value = descriptionEl.value ? descriptionEl.value + " " + transcript : transcript;
+    };
+    recognition.start();
+  });
+
+  function showStatus(message, type) {
+    statusMsg.textContent = message;
+    statusMsg.className = "status-msg " + type;
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting...";
+
+    const payload = {
+      department: DEPARTMENT,
+      location: document.getElementById("location").value,
+      description: document.getElementById("description").value,
+      priority: document.getElementById("priority").value,
+      reported_by: document.getElementById("reportedBy").value,
+      phone: document.getElementById("phone").value,
+    };
+
+    try {
+      const res = await fetch(API_BASE + "/api/complaints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Submission failed");
+
+      showStatus("✅ Complaint submitted successfully. Reference #" + data.complaint.id, "success");
+      form.reset();
+      loadRecent();
+    } catch (err) {
+      showStatus("❌ " + err.message, "error");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit Complaint";
+    }
+  });
+
+  async function loadRecent() {
+    const list = document.getElementById("recentList");
+    try {
+      const res = await fetch(API_BASE + "/api/complaints?department=" + DEPARTMENT);
+      const data = await res.json();
+      const items = data.complaints || [];
+
+      if (items.length === 0) {
+        list.innerHTML = '<p style="color:#9ca3af; font-size:12px;">No complaints yet.</p>';
+        return;
+      }
+
+      list.innerHTML = items.slice(0, 8).map(c => `
+        <div class="recent-item">
+          <strong>${c.location}</strong>
+          <div>${c.description}</div>
+          <span class="badge ${c.status === 'Resolved' ? 'resolved' : 'open'}">${c.status}</span>
+          <div class="meta">${c.reported_by || 'Anonymous'} · ${new Date(c.created_at).toLocaleString()}</div>
+        </div>
+      `).join("");
+    } catch (err) {
+      list.innerHTML = '<p style="color:#dc2626; font-size:12px;">Could not load complaints.</p>';
+    }
+  }
+
+  loadRecent();
+</script>
+
+</body>
+</html>

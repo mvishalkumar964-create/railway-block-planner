@@ -393,59 +393,80 @@ function App() {
 
   // Add new block request
   const addBlockRequest = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
+  const {
+    task,
+    department,
+    location,
+    date,
+    startTime,
+    endTime,
+    reason,
+  } = blockFormData;
+
+  // Required fields check
+  if (
+    !task?.trim() ||
+    !department?.trim() ||
+    !location?.trim() ||
+    !date ||
+    !startTime ||
+    !endTime
+  ) {
+    alert("Please provide all required fields");
     console.log("BLOCK FORM DATA:", blockFormData);
-    try {
-      const response = await fetch(
-        "https://railway-block-planner-m9f2.onrender.com/api/block-requests",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            task_name: blockFormData.task,
-            department: blockFormData.department,
-            location: blockFormData.location,
-            request_date: blockFormData.date,
-            start_time: blockFormData.startTime,
-            end_time: blockFormData.endTime,
-            reason: blockFormData.reason,
-          }),
-        }
-      );
+    return;
+  }
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.message || "Failed to create block request.");
-        return;
+  try {
+    const response = await fetch(
+      "https://railway-block-planner-m9f2.onrender.com/api/block-requests",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          task_name: task,
+          department: department,
+          location: location,
+          request_date: date,
+          start_time: startTime,
+          end_time: endTime,
+          reason: reason || "",
+        }),
       }
+    );
 
-      alert("✅ Block Request created successfully!");
+    const data = await response.json();
 
-      // Refresh block request list from database
-      await loadBlockRequests();
-
-      // Close form
-      setShowBlockForm(false);
-
-      // Reset form
-      setBlockFormData({
-        task: "",
-        department: "Engineering",
-        location: "",
-        date: "",
-        startTime: "",
-        endTime: "",
-        reason: "",
-      });
-    } catch (error) {
-      console.error("Block request error:", error);
-      alert("❌ Could not connect to backend.");
+    if (!response.ok) {
+      alert(data.message || "Failed to create block request.");
+      return;
     }
-  };
+
+    alert("✅ Block Request created successfully!");
+
+    await loadBlockRequests();
+
+    setShowBlockForm(false);
+
+    setBlockFormData({
+      task: "",
+      department: "Engineering",
+      location: "",
+      date: "",
+      startTime: "",
+      endTime: "",
+      reason: "",
+    });
+
+  } catch (error) {
+    console.error("Block request error:", error);
+    alert("❌ Could not connect to backend.");
+  }
+};
 
   // ================= AI BLOCK WINDOW OPTIONS (Module 3) =================
   // Decision support only: shows candidate time windows with pros/cons.

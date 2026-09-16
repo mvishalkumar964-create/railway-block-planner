@@ -1,69 +1,3 @@
-const express = require("express");
-const cors = require("cors");
-const { Pool } = require("pg");
-require("dotenv").config();
-
-// Anthropic SDK for the AI planning + AI extraction features
-const Anthropic = require("@anthropic-ai/sdk");
-
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
-
-// Anthropic client, reads key from .env (ANTHROPIC_API_KEY)
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-pool.query("SELECT NOW()", (err) => {
-  if (err) {
-    console.error("❌ PostgreSQL connection failed:", err.message);
-  } else {
-    console.log("✅ PostgreSQL connected successfully");
-  }
-});
-
-app.get("/", (req, res) => {
-  res.json({
-    message: "Railway Block Planning Backend is running!",
-  });
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "OK",
-    message: "Backend server is working",
-  });
-});
-
-app.get("/api/db-test", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW() AS current_time");
-
-    res.json({
-      status: "OK",
-      message: "Database connection is working",
-      time: result.rows[0].current_time,
-    });
-  } catch (error) {
-    console.error("Database error:", error.message);
-
-    res.status(500).json({
-      status: "ERROR",
-      message: "Database connection failed",
-      error: error.message,
-    });
-  }
-});
-
 // ===============================
 // MAINTENANCE TASK APIs
 // (single source of truth — frontend calls these /api/maintenance routes;
@@ -711,6 +645,130 @@ human controller makes the final decision.
     res.status(500).json({
       status: "ERROR",
       message: "AI conflict analysis failed",
+      error: error.message,
+    });
+  }
+});
+
+// ================= COMPLAINTS API (Field Apps) =================
+// Powers the 3 standalone field apps (Engineering / S&T / Traction).
+// Fully separate table and routes — does not touch any existing
+// maintenance/block-request logic above. Auto-creates its own table on
+// first use so no manual Neon migration is required for this feature.
+
+let complaintsTableReady = false;
+async function ensureComplaintsTable() {
+  if (complaintsTableReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS complaints (
+      id SERIAL PRIMARY KEY,
+      department TEXT NOT NULL,
+      location TEXT NOT NULL,
+      description TEXT NOT NULL,
+      priority TEXT DEFAULT 'Medium',
+      reported_by TEXT,
+      phone TEXT,
+      status TEXT DEFAULT 'Open',
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  complaintsTableReady = true;
+}
+
+// POST - anyone (field staff) submits a complaint from one of the 3 apps
+app.post("/api/complaints", async (req, res) => {
+  try {
+    await ensureComplaintsTable();
+
+    const { department, location, description, priority, reported_by, phone } =
+      req.body;
+
+    if (!department || !location || !description) {
+      return res.status(400).json({
+        status: "ERROR",
+        message: "department, location and description are required",
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO complaints
+      (department, location, description, priority, reported_by, phone, status)
+      VALUES ($1, $2, $3, $4, $5, $6, 'Open')
+      RETURNING *`,
+      [department, location, description, priority || "Medium", reported_by || "", phone || ""]
+    );
+
+    res.status(201).json({
+      status: "OK",
+      message: "Complaint submitted successfully",
+      complaint: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Create complaint error:", error.message);
+    res.status(500).json({
+      status: "ERROR",
+      message: "Could not submit complaint",
+      error: error.message,
+    });
+  }
+});
+
+// GET - list complaints, optionally filtered by department (?department=Engineering)
+app.get("/api/complaints", async (req, res) => {
+  try {
+    await ensureComplaintsTable();
+
+    const { department } = req.query;
+
+    const result = department
+      ? await pool.query(
+          "SELECT * FROM complaints WHERE department = $1 ORDER BY id DESC",
+          [department]
+        )
+      : await pool.query("SELECT * FROM complaints ORDER BY id DESC");
+
+    res.json({
+      status: "OK",
+      complaints: result.rows,
+    });
+  } catch (error) {
+    console.error("Get complaints error:", error.message);
+    res.status(500).json({
+      status: "ERROR",
+      message: "Could not fetch complaints",
+      error: error.message,
+    });
+  }
+});
+
+// PUT - mark a complaint resolved (for later admin use, e.g. from main dashboard)
+app.put("/api/complaints/:id/status", async (req, res) => {
+  try {
+    await ensureComplaintsTable();
+
+    const { id } = req.params;
+    const { status } = req.body;
+    const allowed = ["Open", "In Progress", "Resolved"];
+
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ status: "ERROR", message: "Invalid status" });
+    }
+
+    const result = await pool.query(
+      "UPDATE complaints SET status = $1 WHERE id = $2 RETURNING *",
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: "ERROR", message: "Complaint not found" });
+    }
+
+    res.json({ status: "OK", complaint: result.rows[0] });
+  } catch (error) {
+    console.error("Update complaint error:", error.message);
+    res.status(500).json({
+      status: "ERROR",
+      message: "Could not update complaint",
       error: error.message,
     });
   }
