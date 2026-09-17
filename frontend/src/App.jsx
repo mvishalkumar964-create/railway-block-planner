@@ -406,18 +406,7 @@ function App() {
   } = blockFormData;
 
   // Required fields check
-  if (
-    !task?.trim() ||
-    !department?.trim() ||
-    !location?.trim() ||
-    !date ||
-    !startTime ||
-    !endTime
-  ) {
-    alert("Please provide all required fields");
-    console.log("BLOCK FORM DATA:", blockFormData);
-    return;
-  }
+  console.log("BLOCK FORM DATA BEFORE SUBMIT:", blockFormData);
 
   try {
     const response = await fetch(
@@ -1825,6 +1814,7 @@ function App() {
                         }}
                       >
                         <option value="">Select Task</option>
+
 
                         {tasks.map((task) => (
                           <option key={task.id} value={task.task}>
